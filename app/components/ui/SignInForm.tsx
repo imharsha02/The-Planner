@@ -2,6 +2,9 @@
 import * as z from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/app/lib/supabase";
 import {
   Form,
   FormControl,
@@ -12,40 +15,68 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TypographyH2 } from "@/components/ui/Typography/TypographyH2";
+
+// Updated form schema to accept username or email
 const formSchema = z.object({
-  username: z.string(),
-  password: z.string().min(8),
+  login: z.string().min(3, "Username or email must be at least 3 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
+
 const SignInForm = () => {
-  const [userDetails, setUserDetails] = useState({
-    username: "",
-    password: "",
-  });
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      username: "",
+      login: "",
+      password: "",
     },
   });
 
-  const handleSubmit = () => {
-    console.log("Form submitted");
+  const handleSubmit = async (values: z.infer<typeof formSchema>) => {
+    setIsLoading(true);
+    try {
+      // Query the users table to find the user
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .or(`email.eq.${values.login},username.eq.${values.login}`)
+        .single();
+
+      if (error || !data) {
+        // User not found
+        router.push("/register");
+        return;
+      }
+
+      // Actual login attempt using Supabase auth
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: data.email, // Use the email from the users table
+        password: values.password,
+      });
+
+      if (authError) {
+        // Authentication failed
+        router.push("/register");
+        return;
+      }
+
+      // Successful login
+      router.push("/Home");
+    } catch {
+      router.push("/register");
+    } finally {
+      setIsLoading(false);
+    }
   };
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setUserDetails((prevDetails) => ({
-      ...prevDetails,
-      [name]: value,
-    }));
-  };
+
   return (
     <Card className="w-max mx-auto my-10">
       <CardHeader>
         <CardTitle>
-          {" "}
           <TypographyH2 className="border-none text-center tracking-wide py-3">
             Sign in to Planner
           </TypographyH2>
@@ -57,52 +88,45 @@ const SignInForm = () => {
             onSubmit={form.handleSubmit(handleSubmit)}
             className="max-w-md w-full flex flex-col gap-4 mx-auto"
           >
-            {/* USERNAME FIELD */}
+            {/* LOGIN FIELD (USERNAME OR EMAIL) */}
             <FormField
               control={form.control}
-              name="username"
-              render={({ field }) => {
-                return (
-                  <FormItem>
-                    <FormLabel>Username</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="text"
-                        placeholder="Enter your username"
-                        onChange={handleInputChange}
-                        value={userDetails.username}
-                      />
-                    </FormControl>
-                  </FormItem>
-                );
-              }}
+              name="login"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Username or Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="text"
+                      placeholder="Enter username or email"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
 
             {/* PASSWORD FIELD */}
             <FormField
               control={form.control}
               name="password"
-              render={({ field }) => {
-                return (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="Enter the password"
-                        type="password"
-                        onChange={handleInputChange}
-                        value={userDetails.password}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                );
-              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="password"
+                      placeholder="Enter your password"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            <Button type="submit" className="w-full">
-              Sign in
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
         </Form>
