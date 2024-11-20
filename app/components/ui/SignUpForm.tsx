@@ -19,7 +19,7 @@ import { TypographyH2 } from "@/components/ui/Typography/TypographyH2";
 import { supabase } from "@/app/lib/supabase";
 import { useState } from "react";
 
-const crypto = require("crypto");
+import crypto from 'crypto'
 
 const formSchema = z
   .object({

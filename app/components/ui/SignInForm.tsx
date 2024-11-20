@@ -1,9 +1,9 @@
 "use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import * as z from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import {
   Form,
@@ -17,59 +17,78 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TypographyH2 } from "@/components/ui/Typography/TypographyH2";
+import crypto from "crypto";
 
-// Updated form schema to accept username or email
 const formSchema = z.object({
-  login: z.string().min(3, "Username or email must be at least 3 characters"),
+  identifier: z.string().min(1, "Username or email is required"),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
+type FormData = z.infer<typeof formSchema>;
+
 const SignInForm = () => {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      login: "",
+      identifier: "",
       password: "",
     },
   });
 
-  const handleSubmit = async (values: z.infer<typeof formSchema>) => {
-    setIsLoading(true);
+  const handleSubmit = async (data: FormData) => {
+    setIsSubmitting(true);
+    setError("");
+
     try {
-      // Query the users table to find the user
-      const { data, error } = await supabase
+      // Hash the password using the same strategy as SignUpForm
+      const hashedPassword = crypto
+        .createHash("sha256")
+        .update(data.password)
+        .digest("hex");
+
+      // Check if identifier is an email
+      const isEmail = data.identifier.includes("@");
+
+      // Query the users table
+      const { data: users, error: fetchError } = await supabase
         .from("users")
         .select("*")
-        .or(`email.eq.${values.login},username.eq.${values.login}`)
+        .or(
+          isEmail
+            ? `email.eq.${data.identifier}`
+            : `username.eq.${data.identifier}`
+        )
         .single();
 
-      if (error || !data) {
-        // User not found
+      if (fetchError) {
+        setError("Error fetching user data. Looks like you have to register");
+        setTimeout(() => {
+          router.push("/register");
+        }, 1000);
+        return;
+      }
+
+      if (!users) {
+        setError("User not found");
         router.push("/register");
         return;
       }
 
-      // Actual login attempt using Supabase auth
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email: data.email, // Use the email from the users table
-        password: values.password,
-      });
-
-      if (authError) {
-        // Authentication failed
-        router.push("/register");
-        return;
+      // Verify password
+      if (users.password === hashedPassword) {
+        router.push("/Home");
+      } else {
+        setError("Invalid credentials");
       }
-
-      // Successful login
-      router.push("/Home");
-    } catch {
-      router.push("/register");
+    } catch (err) {
+      setError("An error occurred during sign in");
+      console.error("Sign in error:", err);
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -88,10 +107,9 @@ const SignInForm = () => {
             onSubmit={form.handleSubmit(handleSubmit)}
             className="max-w-md w-full flex flex-col gap-4 mx-auto"
           >
-            {/* LOGIN FIELD (USERNAME OR EMAIL) */}
             <FormField
               control={form.control}
-              name="login"
+              name="identifier"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Username or Email</FormLabel>
@@ -99,7 +117,7 @@ const SignInForm = () => {
                     <Input
                       {...field}
                       type="text"
-                      placeholder="Enter username or email"
+                      placeholder="Enter your username or email"
                     />
                   </FormControl>
                   <FormMessage />
@@ -107,7 +125,6 @@ const SignInForm = () => {
               )}
             />
 
-            {/* PASSWORD FIELD */}
             <FormField
               control={form.control}
               name="password"
@@ -125,8 +142,13 @@ const SignInForm = () => {
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Signing in..." : "Sign in"}
+
+            {error && (
+              <div className="text-red-500 text-sm text-center">{error}</div>
+            )}
+
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Signing in..." : "Sign in"}
             </Button>
           </form>
         </Form>
