@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TypographyH2 } from "@/components/ui/Typography/TypographyH2";
 import { supabase } from "@/app/lib/supabase";
 import { useState } from "react";
-import crypto from 'crypto';
+import crypto from "crypto";
 
 const formSchema = z
   .object({
@@ -61,32 +61,39 @@ const SignUpForm = () => {
     setError("");
 
     try {
-      // Check if user already exists
-      const { data: existingUser } = await supabase
+      // Fixed query syntax using proper Supabase query builder
+      const { data: existingUser, error: fetchError } = await supabase
         .from("users")
-        .select()
+        .select("*")
         .or(`username.eq.${data.username},email.eq.${data.email}`)
         .single();
 
-      if (existingUser) {
-        setError("A user with this username or email already exists");
-        setIsSubmitting(false);
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error("Error checking existing user:", fetchError);
+        setError("Error checking user account");
         return;
       }
 
+      if (existingUser) {
+        setError("A user with this username or email already exists");
+        return;
+      }
+
+      // Add some salt to make the hash more secure
+      const salt = crypto.randomBytes(16).toString('hex');
       const hashedPassword = crypto
-        .createHash("sha256")
-        .update(data.password)
-        .digest("hex");
+        .pbkdf2Sync(data.password, salt, 1000, 64, 'sha512')
+        .toString('hex');
 
       const { error: insertError } = await supabase.from("users").insert({
         email: data.email,
         username: data.username,
         password: hashedPassword,
+        salt: salt, // Store the salt for later verification
       });
 
       if (insertError) {
-        console.error("Error inserting user:", insertError);
+        console.error("Error inserting user:", insertError.message || insertError);
         setError("Error creating user account");
       } else {
         router.push("/Home");
