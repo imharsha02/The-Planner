@@ -18,8 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TypographyH2 } from "@/components/ui/Typography/TypographyH2";
 import { supabase } from "@/app/lib/supabase";
 import { useState } from "react";
-
-import crypto from 'crypto'
+import crypto from 'crypto';
 
 const formSchema = z
   .object({
@@ -45,6 +44,8 @@ const SignUpForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState("");
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -57,23 +58,42 @@ const SignUpForm = () => {
 
   const handleSubmit = async (data: FormData) => {
     setIsSubmitting(true);
-    const hashedPassword = crypto
-      .createHash("sha256")
-      .update(data.password)
-      .digest("hex");
+    setError("");
 
     try {
-      const { error } = await supabase.from("users").insert({
+      // Check if user already exists
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select()
+        .or(`username.eq.${data.username},email.eq.${data.email}`)
+        .single();
+
+      if (existingUser) {
+        setError("A user with this username or email already exists");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const hashedPassword = crypto
+        .createHash("sha256")
+        .update(data.password)
+        .digest("hex");
+
+      const { error: insertError } = await supabase.from("users").insert({
         email: data.email,
         username: data.username,
         password: hashedPassword,
       });
 
-      if (error) {
-        console.error("Error inserting user:", error);
+      if (insertError) {
+        console.error("Error inserting user:", insertError);
+        setError("Error creating user account");
       } else {
         router.push("/Home");
       }
+    } catch (err) {
+      console.error("Registration error:", err);
+      setError("An error occurred during registration");
     } finally {
       setIsSubmitting(false);
     }
@@ -144,6 +164,7 @@ const SignUpForm = () => {
                         type={showPassword ? "text" : "password"}
                       />
                       <button
+                        type="button"
                         onClick={() => {
                           setShowPassword((prevState) => !prevState);
                         }}
@@ -184,6 +205,11 @@ const SignUpForm = () => {
                 </FormItem>
               )}
             />
+
+            {error && (
+              <div className="text-red-500 text-sm text-center">{error}</div>
+            )}
+
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? "Registering..." : "Register"}
             </Button>
