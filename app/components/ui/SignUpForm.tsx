@@ -61,21 +61,29 @@ const SignUpForm = () => {
     setError("");
 
     try {
-      // Fixed query syntax using proper Supabase query builder
-      const { data: existingUser, error: fetchError } = await supabase
+      // Check for existing username
+      const { data: existingUsername } = await supabase
         .from("users")
-        .select("*")
-        .or(`username.eq.${data.username},email.eq.${data.email}`)
+        .select("username")
+        .eq("username", data.username)
         .single();
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error("Error checking existing user:", fetchError);
-        setError("Error checking user account");
+      if (existingUsername) {
+        setError("This username is already taken. Please choose another one.");
+        setIsSubmitting(false);
         return;
       }
 
-      if (existingUser) {
-        setError("A user with this username or email already exists");
+      // Check for existing email
+      const { data: existingEmail } = await supabase
+        .from("users")
+        .select("email")
+        .eq("email", data.email)
+        .single();
+
+      if (existingEmail) {
+        setError("An account with this email already exists.");
+        setIsSubmitting(false);
         return;
       }
 
@@ -163,18 +171,18 @@ const SignUpForm = () => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Password</FormLabel>
-                  <FormControl className="flex space-x-2">
-                    <div>
+                  <FormControl>
+                    <div className="relative w-full">
                       <Input
                         {...field}
                         placeholder="Enter a password"
                         type={showPassword ? "text" : "password"}
+                        className="w-full pr-10"
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          setShowPassword((prevState) => !prevState);
-                        }}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                        onClick={() => setShowPassword((prev) => !prev)}
                       >
                         {showPassword ? <FaRegEyeSlash /> : <FaRegEye />}
                       </button>
@@ -191,18 +199,18 @@ const SignUpForm = () => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Confirm password</FormLabel>
-                  <FormControl className="flex space-x-2">
-                    <div>
+                  <FormControl>
+                    <div className="relative w-full">
                       <Input
                         {...field}
                         placeholder="re-type password"
                         type={showConfirmPassword ? "text" : "password"}
+                        className="w-full pr-10"
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          setShowConfirmPassword((prevState) => !prevState);
-                        }}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
                       >
                         {showConfirmPassword ? <FaRegEyeSlash /> : <FaRegEye />}
                       </button>
