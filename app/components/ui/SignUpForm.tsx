@@ -88,10 +88,10 @@ const SignUpForm = () => {
       }
 
       // Add some salt to make the hash more secure
-      const salt = crypto.randomBytes(16).toString('hex');
+      const salt = crypto.randomBytes(16).toString("hex");
       const hashedPassword = crypto
-        .pbkdf2Sync(data.password, salt, 1000, 64, 'sha512')
-        .toString('hex');
+        .pbkdf2Sync(data.password, salt, 1000, 64, "sha512")
+        .toString("hex");
 
       const { error: insertError } = await supabase.from("users").insert({
         email: data.email,
@@ -101,10 +101,13 @@ const SignUpForm = () => {
       });
 
       if (insertError) {
-        console.error("Error inserting user:", insertError.message || insertError);
+        console.error(
+          "Error inserting user:",
+          insertError.message || insertError
+        );
         setError("Error creating user account");
       } else {
-        router.push("/Home");
+        router.push("/Dashboard");
       }
     } catch (err) {
       console.error("Registration error:", err);
